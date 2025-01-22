@@ -10,7 +10,9 @@ const server = Bun.serve({
             const formData = await req.formData();
             const body = Object.fromEntries(formData.entries());
 
-            const resp = router(body)
+            const resp = await router(body)
+
+            console.log(resp)
 
             return Response.json(resp)
         }
