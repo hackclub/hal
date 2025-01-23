@@ -23,12 +23,11 @@ Challenges
 - challengeLanguageConstraint: Rust
 - challengeMinimumTeamSize:
 
-Team
+ChallengeTeam
 - Challenge
-- TeamName
-- ParticipatingMembers
+- ChallengeParticipant
 
-Participant
+ChallengeParticipant
 - Team
 - Person
 

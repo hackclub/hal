@@ -25,6 +25,7 @@ model Challenge {
   challengeEditorConstraint String?
   challengeLanguageConstraint String?
   challengeMinimumTeamSize  Int         @default(0)
+  teams                     ChallengeTeam[]
   createdAt                DateTime     @default(now())
   updatedAt                DateTime     @updatedAt
 }
@@ -34,6 +35,31 @@ model Person {
   slackId     String   @unique
   slackHandle String
   admin       Boolean  @default(false)
+  teams       ChallengeParticipant[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model ChallengeTeam {
+    id          String   @id @default(cuid())
+    joinCode    String
+    challenge   Challenge @relation(fields: [challengeId], references: [id])
+    challengeId Int
+    members     ChallengeParticipant[] @relation("TeamParticipants", onDelete: Cascade)
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    @@unique([challengeId, joinCode])
+}
+
+model ChallengeParticipant {
+    id        String   @id @default(cuid())
+    team      ChallengeTeam @relation("TeamParticipants", fields: [teamId], references: [id], onDelete: Cascade)
+    teamId    String
+    person    Person @relation(fields: [personId], references: [id])
+    personId  Int
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@unique([teamId, personId])
 }

@@ -10,6 +10,25 @@ export class Person {
     this.updatedAt = data.updatedAt
   }
 
+  // Find or create a person from their Slack ID and handle
+  static async findOrCreateFromSlack(slackId, slackHandle) {
+    try {
+      const person = await prisma.person.upsert({
+        where: { slackId },
+        update: { slackHandle },
+        create: {
+          slackId,
+          slackHandle,
+          admin: false
+        }
+      })
+      return new Person(person)
+    } catch (error) {
+      console.error('Error in findOrCreateFromSlack:', error)
+      throw error
+    }
+  }
+
   // Find a person by their Slack ID
   static async findBySlackId(slackId) {
     const person = await prisma.person.findUnique({
