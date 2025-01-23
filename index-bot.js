@@ -79,6 +79,36 @@ const getHomeView = async (challenges = [], userId, userHandle) => {
                     text: `*Your Team*\nTeam Code: \`${userTeam.joinCode}\`${teammates ? `\nTeammates: ${teammates}` : '\nNo teammates yet'}`
                 }
             })
+
+            // Add challenge progress if challenge has started
+            if (challenge.state() === 'started') {
+                const stats = await challenge.getStatsForUser(person.slackId)
+                
+                // Add daily progress blocks
+                for (const day of stats.days) {
+                    const participantStats = day.participants.map(p => {
+                        const minutes = Math.round(p.timeSeconds / 60)
+                        return `<@${p.slackId}>: ${p.status} ${minutes}m`
+                    }).join('\n')
+
+                    const teamPlace = day.leaderboard.myTeam.teamPlace
+                    const totalTeams = day.leaderboard.myTeam.totalTeams
+                    const teamMinutes = Math.round(day.leaderboard.myTeam.teamTimeSeconds / 60)
+
+                    blocks.push(
+                        {
+                            type: "section",
+                            text: {
+                                type: "mrkdwn",
+                                text: `*${day.title} - ${day.date}*\nTeam Status: ${day.teamStatus}\nTeam Place: ${teamPlace}/${totalTeams} (${teamMinutes}m)\n\n${participantStats}`
+                            }
+                        },
+                        {
+                            type: "divider"
+                        }
+                    )
+                }
+            }
             
             // Only show team management buttons if challenge hasn't started
             if (challenge.state() !== 'started') {
