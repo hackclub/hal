@@ -79,76 +79,81 @@ const getHomeView = async (challenges = [], userId, userHandle) => {
                 }
             })
             
-            // Add join team button even when already in a team
-            blocks.push({
-                type: "actions",
-                elements: [
-                    {
-                        type: "button",
-                        text: {
-                            type: "plain_text",
-                            text: "Switch Teams",
-                            emoji: true
-                        },
-                        action_id: `join_team:${challenge.id}`
-                    },
-                    {
-                        type: "button",
-                        text: {
-                            type: "plain_text",
-                            text: "Leave Team",
-                            emoji: true
-                        },
-                        style: "danger",
-                        action_id: `leave_team:${challenge.id}`,
-                        confirm: {
-                            title: {
-                                type: "plain_text",
-                                text: "Leave Team"
-                            },
+            // Only show team management buttons if challenge hasn't started
+            if (challenge.state() !== 'started') {
+                blocks.push({
+                    type: "actions",
+                    elements: [
+                        {
+                            type: "button",
                             text: {
                                 type: "plain_text",
-                                text: "Are you sure you want to leave this team? If you're the last member, the team will be deleted."
+                                text: "Switch Teams",
+                                emoji: true
                             },
+                            action_id: `join_team:${challenge.id}`
+                        },
+                        {
+                            type: "button",
+                            text: {
+                                type: "plain_text",
+                                text: "Leave Team",
+                                emoji: true
+                            },
+                            style: "danger",
+                            action_id: `leave_team:${challenge.id}`,
                             confirm: {
-                                type: "plain_text",
-                                text: "Yes, Leave Team"
-                            },
-                            deny: {
-                                type: "plain_text",
-                                text: "Cancel"
-                            },
-                            style: "danger"
+                                title: {
+                                    type: "plain_text",
+                                    text: "Leave Team"
+                                },
+                                text: {
+                                    type: "plain_text",
+                                    text: "Are you sure you want to leave this team? If you're the last member, the team will be deleted."
+                                },
+                                confirm: {
+                                    type: "plain_text",
+                                    text: "Yes, Leave Team"
+                                },
+                                deny: {
+                                    type: "plain_text",
+                                    text: "Cancel"
+                                },
+                                style: "danger"
+                            }
                         }
-                    }
-                ]
-            })
+                    ]
+                })
+            }
         } else {
             // User is not in a team
-            blocks.push({
-                type: "actions",
-                elements: [
-                    {
-                        type: "button",
-                        text: {
-                            type: "plain_text",
-                            text: "Create Team",
-                            emoji: true
+            // Only show team creation/joining buttons if challenge hasn't started
+            if (challenge.state() !== 'started') {
+                blocks.push({
+                    type: "actions",
+                    elements: [
+                        {
+                            type: "button",
+                            text: {
+                                type: "plain_text",
+                                text: "Create Team",
+                                emoji: true
+                            },
+                            action_id: `create_team:${challenge.id}`,
+                            style: "primary"
                         },
-                        action_id: `create_team:${challenge.id}`,
-                        style: "primary"
-                    },
-                    {
-                        type: "button",
-                        text: {
-                            type: "plain_text",
-                            text: "Join Team With Code",
-                            emoji: true
-                        },
-                        action_id: `join_team:${challenge.id}`
-                    }
-                ]
-            })
+                        {
+                            type: "button",
+                            text: {
+                                type: "plain_text",
+                                text: "Join Team With Code",
+                                emoji: true
+                            },
+                            action_id: `join_team:${challenge.id}`
+                        }
+                    ]
+                })
+            }
         }
 
         blocks.push({
@@ -623,6 +628,10 @@ app.action(/create_team:.+/, async ({ ack, body, client }) => {
             throw new Error("Challenge not found")
         }
 
+        if (challenge.state() === 'started') {
+            throw new Error("Cannot create teams after the challenge has started")
+        }
+
         const person = await Person.findOrCreateFromSlack(body.user.id, body.user.name)
         if (!person) {
             throw new Error("An unexpected error occurred")
@@ -705,45 +714,63 @@ app.action(/join_team:.+/, async ({ ack, body, client }) => {
     await ack()
     const challengeId = parseInt(body.actions[0].action_id.split(':')[1])
     
-    // Create person record if it doesn't exist
-    await Person.findOrCreateFromSlack(body.user.id, body.user.name)
-    
-    await client.views.push({
-        trigger_id: body.trigger_id,
-        view: {
-            type: "modal",
-            callback_id: "join_team_modal",
-            private_metadata: String(challengeId),
-            title: {
-                type: "plain_text",
-                text: "Join a Team",
-                emoji: true
-            },
-            submit: {
-                type: "plain_text",
-                text: "Join Team",
-                emoji: true
-            },
-            blocks: [
-                {
-                    type: "input",
-                    block_id: "team_code",
-                    element: {
-                        type: "plain_text_input",
-                        action_id: "code_input",
-                        placeholder: {
-                            type: "plain_text",
-                            text: "Enter the team code"
-                        }
-                    },
-                    label: {
-                        type: "plain_text",
-                        text: "Team Code"
-                    }
-                }
-            ]
+    try {
+        const challenge = await Challenge.findById(challengeId)
+        if (!challenge) {
+            throw new Error("Challenge not found")
         }
-    })
+
+        if (challenge.state() === 'started') {
+            throw new Error("Cannot join teams after the challenge has started")
+        }
+
+        // Create person record if it doesn't exist
+        await Person.findOrCreateFromSlack(body.user.id, body.user.name)
+        
+        await client.views.push({
+            trigger_id: body.trigger_id,
+            view: {
+                type: "modal",
+                callback_id: "join_team_modal",
+                private_metadata: String(challengeId),
+                title: {
+                    type: "plain_text",
+                    text: "Join a Team",
+                    emoji: true
+                },
+                submit: {
+                    type: "plain_text",
+                    text: "Join Team",
+                    emoji: true
+                },
+                blocks: [
+                    {
+                        type: "input",
+                        block_id: "team_code",
+                        element: {
+                            type: "plain_text_input",
+                            action_id: "code_input",
+                            placeholder: {
+                                type: "plain_text",
+                                text: "Enter the team code"
+                            }
+                        },
+                        label: {
+                            type: "plain_text",
+                            text: "Team Code"
+                        }
+                    }
+                ]
+            }
+        })
+    } catch (error) {
+        await ack({
+            response_action: "errors",
+            errors: {
+                team_code: error.message
+            }
+        })
+    }
 })
 
 // Handle Join Team modal submission
@@ -892,6 +919,15 @@ app.action(/leave_team:.+/, async ({ ack, body, client }) => {
     const challengeId = parseInt(body.actions[0].action_id.split(':')[1])
     
     try {
+        const challenge = await Challenge.findById(challengeId)
+        if (!challenge) {
+            throw new Error("Challenge not found")
+        }
+
+        if (challenge.state() === 'started') {
+            throw new Error("Cannot leave teams after the challenge has started")
+        }
+
         const person = await Person.findOrCreateFromSlack(body.user.id, body.user.username)
         if (!person) {
             throw new Error("Could not find your user record")
@@ -912,7 +948,7 @@ app.action(/leave_team:.+/, async ({ ack, body, client }) => {
                 }
             })
 
-            if (!currentParticipation) {
+           if (!currentParticipation) {
                 throw new Error("You're not in a team for this challenge")
             }
 
