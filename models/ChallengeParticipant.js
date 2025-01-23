@@ -1,6 +1,7 @@
 import { prisma } from '../db'
 import { daysBetweenYyymmdd, yyyymmddLocalTimezone } from '../util'
 import { Challenge } from './Challenge'
+import { ChallengeParticipantDailyHackatimeSummary } from './ChallengeParticipantDailyHackatimeSummary'
 import { ChallengeTeam } from './ChallengeTeam'
 
 export class ChallengeParticipant {
@@ -143,9 +144,13 @@ export class ChallengeParticipant {
         // days during the challenge that we've received new heartbeats for
         let daysToRefresh = heartbeatDays.filter(day => challengeDays.includes(day))
 
+        let summaries = []
+
         for (let day of daysToRefresh) {
-            let dailySummary = await DailyHackatimeSummary.findByDay(day)
+            summaries.push(await ChallengeParticipantDailyHackatimeSummary.createOrUpdate(day, this.id, tz))
         }
+
+        return summaries
     }
 
     // Remove a participant from a team
