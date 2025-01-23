@@ -49,7 +49,7 @@ export class Hackatime {
             throw new Error("No API key found for user")
         }
 
-        const url = `https://waka.hackclub.com/api/compat/wakatime/v1/users/${slackId}/summaries?start=${startDate}&end=${endDate}`
+        const url = `https://waka.hackclub.com/api/summary?user=${slackId}&from=${startDate}&to=${endDate}&recompute=true`
 
         const response = await fetch(url, {
                 headers: {
