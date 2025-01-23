@@ -69,7 +69,7 @@ export class ChallengeTeam {
         return await prisma.challengeTeam.findFirst({
             where: {
                 challengeId,
-                joinCode: joinCode.toLowerCase()
+                joinCode: joinCode.toUpperCase()
             }
         })
     }
