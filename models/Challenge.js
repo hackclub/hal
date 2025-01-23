@@ -98,4 +98,11 @@ export class Challenge {
     })
     return challenges.map(c => new Challenge(c))
   }
+
+  static async firstChallengeStartAt() {
+    const challenge = await prisma.challenge.findFirst({
+      orderBy: { startedTime: 'asc' }
+    })
+    return challenge ? challenge.startedTime : null
+  }
 } 

@@ -51,4 +51,14 @@ export class ChallengeParticipantDailyHackatimeSummary {
 
         return Hackatime.getHackatimeSummary(slackId, startDate, endDate)
     }
+
+    static async lastSuccessfulSummaryAt() {
+        const data = await prisma.challengeParticipantDailyHackatimeSummary.findFirst({
+            orderBy: {
+                jsonLastUpdated: 'desc'
+            }
+        })
+
+        return data ? data.jsonLastUpdated : null
+    }
 } 

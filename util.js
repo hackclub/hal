@@ -42,3 +42,10 @@ export function daysBetweenYyymmdd(startDateStr, endDateStr) {
 
     return days
 }
+
+const flavortexts = await Bun.file('./flavortext.txt').text()
+const flavortextLines = flavortexts.split('\n').filter(line => line.trim())
+
+export function flavortext() {
+    return flavortextLines[Math.floor(Math.random() * flavortextLines.length)]
+}

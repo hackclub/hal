@@ -4,6 +4,7 @@ import { Person } from "./models/Person"
 import { ChallengeTeam } from "./models/ChallengeTeam"
 import { ChallengeParticipant } from "./models/ChallengeParticipant"
 import { prisma } from "./db"
+import { flavortext } from "./util"
 
 const app = new App({
     token: process.env.SLACK_BOT_TOKEN,
@@ -167,7 +168,7 @@ const getHomeView = async (challenges = [], userId, userHandle) => {
         type: "modal",
         title: {
             type: "plain_text",
-            text: "HAL 👾",
+            text: `${flavortext()} 👾`,
             emoji: true
         },
         blocks: [
