@@ -58,6 +58,7 @@ model ChallengeParticipant {
     teamId    Int
     person    Person @relation(fields: [personId], references: [id])
     personId  Int
+    timezone  String
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 

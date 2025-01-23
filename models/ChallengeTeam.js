@@ -20,7 +20,7 @@ export class ChallengeTeam {
     }
 
     // Create a new team with a unique join code for the challenge
-    static async create(challengeId, personId) {
+    static async create(challengeId, personId, timezone) {
         // Check if person is already in a team for this challenge
         const existingParticipation = await prisma.challengeParticipant.findFirst({
             where: {
@@ -63,7 +63,8 @@ export class ChallengeTeam {
             await tx.challengeParticipant.create({
                 data: {
                     teamId: team.id,
-                    personId
+                    personId,
+                    timezone
                 }
             })
 

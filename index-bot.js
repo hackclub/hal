@@ -637,7 +637,16 @@ app.action(/create_team:.+/, async ({ ack, body, client }) => {
             throw new Error("An unexpected error occurred")
         }
 
-        const team = await ChallengeTeam.create(challengeId, person.id)
+        // Get user's timezone from Slack
+        const userInfo = await client.users.info({
+            user: body.user.id
+        })
+
+        if (!userInfo.ok) {
+            throw new Error("Could not fetch your timezone information")
+        }
+
+        const team = await ChallengeTeam.create(challengeId, person.id, userInfo.user.tz)
         
         await client.views.update({
             view_id: body.view.id,
@@ -661,6 +670,13 @@ app.action(/create_team:.+/, async ({ ack, body, client }) => {
                         text: {
                             type: "mrkdwn",
                             text: `Share this code with others to let them join your team:\n\n*\`${team.joinCode}\`*`
+                        }
+                    },
+                    {
+                        type: "section",
+                        text: {
+                            type: "mrkdwn",
+                            text: `*Important:* Your challenge activity will be tracked in your current timezone (${userInfo.user.tz_label}). All stats and deadlines for this challenge will be based on this timezone.`
                         }
                     },
                     {
@@ -795,6 +811,16 @@ app.view("join_team_modal", async ({ ack, body, view, client }) => {
         }
 
         // Start a transaction for team switching
+        const userInfo = await client.users.info({
+            user: body.user.id
+        })
+
+        if (!userInfo.ok) {
+            throw new Error("Could not fetch your timezone information")
+        }
+
+        const timezone = userInfo.user.tz
+
         await prisma.$transaction(async (tx) => {
             // Find current participation if any
             const currentParticipation = await tx.challengeParticipant.findFirst({
@@ -840,11 +866,12 @@ app.view("join_team_modal", async ({ ack, body, view, client }) => {
                 }
             }
 
-            // Create new participation
+            // Create new participation with timezone
             await tx.challengeParticipant.create({
                 data: {
                     teamId: newTeam.id,
-                    personId: person.id
+                    personId: person.id,
+                    timezone
                 }
             })
         })
@@ -893,6 +920,13 @@ app.view("join_team_modal", async ({ ack, body, view, client }) => {
                         text: {
                             type: "mrkdwn",
                             text: `*Team Code:* \`${newTeam.joinCode}\``
+                        }
+                    },
+                    {
+                        type: "section",
+                        text: {
+                            type: "mrkdwn",
+                            text: `*Important:* Your challenge activity will be tracked in your current timezone (${userInfo.user.tz_label}). All stats and deadlines for this challenge will be based on this timezone.`
                         }
                     }
                 ],
