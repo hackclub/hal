@@ -3,6 +3,7 @@ import { Challenge } from "./models/Challenge"
 import { Person } from "./models/Person"
 import { ChallengeTeam } from "./models/ChallengeTeam"
 import { ChallengeParticipant } from "./models/ChallengeParticipant"
+import { prisma } from "./db"
 
 const app = new App({
     token: process.env.SLACK_BOT_TOKEN,
@@ -10,9 +11,9 @@ const app = new App({
     socketMode: true,
 })
 
-const getHomeView = async (challenges = [], userId) => {
+const getHomeView = async (challenges = [], userId, userHandle) => {
     // Get the user's Person record
-    const person = await Person.findOrCreateFromSlack(userId, userId)
+    const person = await Person.findOrCreateFromSlack(userId, userHandle)
     if (!person) return null
 
     // Get all teams the person is in
@@ -25,12 +26,39 @@ const getHomeView = async (challenges = [], userId) => {
     // Process all challenges in parallel
     const challengeBlocks = await Promise.all(challenges.map(async challenge => {
         const userTeam = teamsByChallenge[challenge.id]
+
+        // Get team statistics
+        const teams = await prisma.challengeTeam.findMany({
+            where: { challengeId: challenge.id },
+            include: {
+                _count: {
+                    select: { members: true }
+                }
+            }
+        })
+
+        const teamsWithMinMembers = teams.filter(t => t._count.members >= challenge.challengeMinimumTeamSize)
+        const teamsUnderMin = teams.filter(t => t._count.members < challenge.challengeMinimumTeamSize)
+        const totalPeopleInCompleteTeams = teamsWithMinMembers.reduce((sum, team) => sum + team._count.members, 0)
+
+        let teamStats
+        if (challenge.challengeMinimumTeamSize > 0) {
+            const completeTeamText = `${teamsWithMinMembers.length} ${teamsWithMinMembers.length === 1 ? 'team' : 'teams'} registered (${totalPeopleInCompleteTeams} ${totalPeopleInCompleteTeams === 1 ? 'person' : 'people'})`
+            teamStats = teamsUnderMin.length > 0 ? 
+                `\n${completeTeamText}, ${teamsUnderMin.length} ${teamsUnderMin.length === 1 ? 'team' : 'teams'} still recruiting` :
+                `\n${completeTeamText}`
+        } else {
+            const totalTeams = teams.length
+            const totalPeople = teams.reduce((sum, team) => sum + team._count.members, 0)
+            teamStats = `\n${totalTeams} ${totalTeams === 1 ? 'team' : 'teams'} total (${totalPeople} ${totalPeople === 1 ? 'person' : 'people'})`
+        }
+
         const blocks = [
             {
                 type: "section",
                 text: {
                     type: "mrkdwn",
-                    text: `*${challenge.name}*\n${challenge.state() === 'started' ? '🟢 In Progress' : '🟡 Open for Signups'}\nType: ${challenge.challengeType}\nMinimum Time: ${challenge.challengeMinimumTime} minutes/day`
+                    text: `*${challenge.name}*\n${challenge.state() === 'started' ? '🟢 In Progress' : '🟡 Open for Signups'}\nType: ${challenge.challengeType}\nMinimum Time: ${challenge.challengeMinimumTime} minutes/day${teamStats}`
                 }
             }
         ]
@@ -40,7 +68,7 @@ const getHomeView = async (challenges = [], userId) => {
             const participants = await userTeam.getParticipants()
             const teammates = participants
                 .filter(p => p.person.id !== person.id)
-                .map(p => p.person.slackHandle)
+                .map(p => `<@${p.person.slackId}>`)
                 .join(", ")
 
             blocks.push({
@@ -49,6 +77,51 @@ const getHomeView = async (challenges = [], userId) => {
                     type: "mrkdwn",
                     text: `*Your Team*\nTeam Code: \`${userTeam.joinCode}\`${teammates ? `\nTeammates: ${teammates}` : '\nNo teammates yet'}`
                 }
+            })
+            
+            // Add join team button even when already in a team
+            blocks.push({
+                type: "actions",
+                elements: [
+                    {
+                        type: "button",
+                        text: {
+                            type: "plain_text",
+                            text: "Switch Teams",
+                            emoji: true
+                        },
+                        action_id: `join_team:${challenge.id}`
+                    },
+                    {
+                        type: "button",
+                        text: {
+                            type: "plain_text",
+                            text: "Leave Team",
+                            emoji: true
+                        },
+                        style: "danger",
+                        action_id: `leave_team:${challenge.id}`,
+                        confirm: {
+                            title: {
+                                type: "plain_text",
+                                text: "Leave Team"
+                            },
+                            text: {
+                                type: "plain_text",
+                                text: "Are you sure you want to leave this team? If you're the last member, the team will be deleted."
+                            },
+                            confirm: {
+                                type: "plain_text",
+                                text: "Yes, Leave Team"
+                            },
+                            deny: {
+                                type: "plain_text",
+                                text: "Cancel"
+                            },
+                            style: "danger"
+                        }
+                    }
+                ]
             })
         } else {
             // User is not in a team
@@ -123,7 +196,7 @@ const getHomeView = async (challenges = [], userId) => {
                 type: "section",
                 text: {
                     type: "mrkdwn",
-                    text: "HAL helps you create and manage coding challenges in your Hack Club community."
+                    text: "CHALLENGE BOT!"
                 }
             },
             {
@@ -133,7 +206,7 @@ const getHomeView = async (challenges = [], userId) => {
                 type: "section",
                 text: {
                     type: "mrkdwn",
-                    text: "*🎯 Challenges*\nCreate and manage coding challenges\n_Admin only: Create new challenges_"
+                    text: "*🎯 Challenges*\nCreate and manage challenges\n_Admin only_"
                 },
                 accessory: {
                     type: "button",
@@ -152,7 +225,7 @@ const getHomeView = async (challenges = [], userId) => {
 app.command("/hal", async ({ command, ack, client }) => {
     await ack()
     const challenges = await Challenge.listActive()
-    const view = await getHomeView(challenges, command.user_id)
+    const view = await getHomeView(challenges, command.user_id, command.user_name)
     if (!view) {
         await client.chat.postEphemeral({
             channel: command.channel_id,
@@ -171,7 +244,7 @@ app.command("/hal", async ({ command, ack, client }) => {
 app.action("open_create_challenge", async ({ ack, body, client }) => {
     await ack()
     
-    const person = await Person.findOrCreateFromSlack(body.user.id, body.user.username)
+    const person = await Person.findOrCreateFromSlack(body.user.id, body.user.name)
     if (!person?.admin) {
         await client.views.update({
             view_id: body.view.id,
@@ -370,7 +443,7 @@ app.action("open_create_challenge", async ({ ack, body, client }) => {
 
 app.view("create_challenge_modal", async ({ ack, body, view, client }) => {
     // Double-check admin status on submission too
-    const person = await Person.findOrCreateFromSlack(body.user.id, body.user.username)
+    const person = await Person.findOrCreateFromSlack(body.user.id, body.user.name)
     if (!person?.admin) {
         await ack({
             response_action: "update",
@@ -509,7 +582,7 @@ app.view("create_challenge_modal", async ({ ack, body, view, client }) => {
 app.action("return_to_home", async ({ ack, body, client }) => {
     await ack()
     const challenges = await Challenge.listActive()
-    const view = await getHomeView(challenges, body.user.id)
+    const view = await getHomeView(challenges, body.user.id, body.user.name)
     if (!view) {
         await client.views.update({
             view_id: body.view.id,
@@ -550,7 +623,7 @@ app.action(/create_team:.+/, async ({ ack, body, client }) => {
             throw new Error("Challenge not found")
         }
 
-        const person = await Person.findOrCreateFromSlack(body.user.id, body.user.username)
+        const person = await Person.findOrCreateFromSlack(body.user.id, body.user.name)
         if (!person) {
             throw new Error("An unexpected error occurred")
         }
@@ -659,14 +732,14 @@ app.action(/join_team:.+/, async ({ ack, body, client }) => {
     const challengeId = parseInt(body.actions[0].action_id.split(':')[1])
     
     // Create person record if it doesn't exist
-    await Person.findOrCreateFromSlack(body.user.id, body.user.username)
+    await Person.findOrCreateFromSlack(body.user.id, body.user.name)
     
     await client.views.push({
         trigger_id: body.trigger_id,
         view: {
             type: "modal",
             callback_id: "join_team_modal",
-            private_metadata: challengeId,
+            private_metadata: String(challengeId),
             title: {
                 type: "plain_text",
                 text: "Join a Team",
@@ -697,6 +770,281 @@ app.action(/join_team:.+/, async ({ ack, body, client }) => {
             ]
         }
     })
+})
+
+// Handle Join Team modal submission
+app.view("join_team_modal", async ({ ack, body, view, client }) => {
+    const challengeId = parseInt(view.private_metadata)
+    const teamCode = view.state.values.team_code.code_input.value.toUpperCase()
+    
+    try {
+        const person = await Person.findOrCreateFromSlack(body.user.id, body.user.name)
+        if (!person) {
+            throw new Error("Could not find or create your user record")
+        }
+
+        const challenge = await Challenge.findById(challengeId)
+        if (!challenge) {
+            throw new Error("Challenge not found")
+        }
+
+        const newTeam = await ChallengeTeam.findByCode(challengeId, teamCode)
+        if (!newTeam) {
+            throw new Error("Team not found. Please check the code and try again")
+        }
+
+        // Start a transaction for team switching
+        await prisma.$transaction(async (tx) => {
+            // Find current participation if any
+            const currentParticipation = await tx.challengeParticipant.findFirst({
+                where: {
+                    personId: person.id,
+                    team: {
+                        challengeId
+                    }
+                },
+                include: {
+                    team: true
+                }
+            })
+
+            // If already in this team, no need to switch
+            if (currentParticipation?.team.joinCode === teamCode) {
+                throw new Error("You're already in this team!")
+            }
+
+            // If in another team, delete current participation
+            if (currentParticipation) {
+                // Delete the participation
+                await tx.challengeParticipant.delete({
+                    where: {
+                        id: currentParticipation.id
+                    }
+                })
+
+                // Check if old team is now empty
+                const remainingParticipants = await tx.challengeParticipant.count({
+                    where: {
+                        teamId: currentParticipation.team.id
+                    }
+                })
+
+                // If team is empty, delete it
+                if (remainingParticipants === 0) {
+                    await tx.challengeTeam.delete({
+                        where: {
+                            id: currentParticipation.team.id
+                        }
+                    })
+                }
+            }
+
+            // Create new participation
+            await tx.challengeParticipant.create({
+                data: {
+                    teamId: newTeam.id,
+                    personId: person.id
+                }
+            })
+        })
+
+        // Show success view
+        const participants = await prisma.challengeParticipant.findMany({
+            where: {
+                teamId: newTeam.id
+            },
+            include: {
+                person: true
+            }
+        })
+
+        const teammates = participants
+            .filter(p => p.person.id !== person.id)
+            .map(p => `<@${p.person.slackId}>`)
+            .join(", ")
+
+        await ack({
+            response_action: "update",
+            view: {
+                type: "modal",
+                title: {
+                    type: "plain_text",
+                    text: "Success! 🎉",
+                    emoji: true
+                },
+                blocks: [
+                    {
+                        type: "section",
+                        text: {
+                            type: "mrkdwn",
+                            text: `You've successfully joined the team!`
+                        }
+                    },
+                    {
+                        type: "section",
+                        text: {
+                            type: "mrkdwn",
+                            text: teammates ? `*Your Teammates:*\n${teammates}` : "*No other teammates yet*"
+                        }
+                    },
+                    {
+                        type: "section",
+                        text: {
+                            type: "mrkdwn",
+                            text: `*Team Code:* \`${newTeam.joinCode}\``
+                        }
+                    },
+                    {
+                        type: "divider"
+                    },
+                    {
+                        type: "actions",
+                        elements: [
+                            {
+                                type: "button",
+                                text: {
+                                    type: "plain_text",
+                                    text: "Back to Home",
+                                    emoji: true
+                                },
+                                action_id: "return_to_home",
+                                style: "primary"
+                            }
+                        ]
+                    }
+                ]
+            }
+        })
+    } catch (error) {
+        await ack({
+            response_action: "errors",
+            errors: {
+                team_code: error.message
+            }
+        })
+    }
+})
+
+// Handle Leave Team button
+app.action(/leave_team:.+/, async ({ ack, body, client }) => {
+    await ack()
+    const challengeId = parseInt(body.actions[0].action_id.split(':')[1])
+    
+    try {
+        const person = await Person.findOrCreateFromSlack(body.user.id, body.user.username)
+        if (!person) {
+            throw new Error("Could not find your user record")
+        }
+
+        // Start a transaction for leaving team
+        await prisma.$transaction(async (tx) => {
+            // Find current participation
+            const currentParticipation = await tx.challengeParticipant.findFirst({
+                where: {
+                    personId: person.id,
+                    team: {
+                        challengeId
+                    }
+                },
+                include: {
+                    team: true
+                }
+            })
+
+            if (!currentParticipation) {
+                throw new Error("You're not in a team for this challenge")
+            }
+
+            // Delete the participation
+            await tx.challengeParticipant.delete({
+                where: {
+                    id: currentParticipation.id
+                }
+            })
+
+            // Check if team is now empty
+            const remainingParticipants = await tx.challengeParticipant.count({
+                where: {
+                    teamId: currentParticipation.team.id
+                }
+            })
+
+            // If team is empty, delete it
+            if (remainingParticipants === 0) {
+                await tx.challengeTeam.delete({
+                    where: {
+                        id: currentParticipation.team.id
+                    }
+                })
+            }
+        })
+
+        // Return to home view with success message
+        const challenges = await Challenge.listActive()
+        const view = await getHomeView(challenges, body.user.id, body.user.username)
+        if (!view) {
+            throw new Error("Could not load home view")
+        }
+
+        // Add success message at the top
+        view.blocks.unshift(
+            {
+                type: "section",
+                text: {
+                    type: "mrkdwn",
+                    text: "✅ You've successfully left the team!"
+                }
+            },
+            {
+                type: "divider"
+            }
+        )
+
+        await client.views.update({
+            view_id: body.view.id,
+            view
+        })
+    } catch (error) {
+        // Show error message
+        await client.views.push({
+            trigger_id: body.trigger_id,
+            view: {
+                type: "modal",
+                title: {
+                    type: "plain_text",
+                    text: "Error ❌",
+                    emoji: true
+                },
+                blocks: [
+                    {
+                        type: "section",
+                        text: {
+                            type: "mrkdwn",
+                            text: `Failed to leave team: ${error.message}`
+                        }
+                    },
+                    {
+                        type: "divider"
+                    },
+                    {
+                        type: "actions",
+                        elements: [
+                            {
+                                type: "button",
+                                text: {
+                                    type: "plain_text",
+                                    text: "Back to Home",
+                                    emoji: true
+                                },
+                                action_id: "return_to_home",
+                                style: "primary"
+                            }
+                        ]
+                    }
+                ]
+            }
+        })
+    }
 })
 
 await app.start()

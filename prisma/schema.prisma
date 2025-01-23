@@ -25,7 +25,7 @@ model Challenge {
   challengeEditorConstraint String?
   challengeLanguageConstraint String?
   challengeMinimumTeamSize  Int         @default(0)
-  teams                     ChallengeTeam[]
+  teams                     ChallengeTeam[] @relation("ChallengeTeams")
   createdAt                DateTime     @default(now())
   updatedAt                DateTime     @updatedAt
 }
@@ -41,11 +41,11 @@ model Person {
 }
 
 model ChallengeTeam {
-    id          String   @id @default(cuid())
+    id          Int      @id @default(autoincrement())
     joinCode    String
-    challenge   Challenge @relation(fields: [challengeId], references: [id])
+    challenge   Challenge @relation("ChallengeTeams", fields: [challengeId], references: [id], onDelete: Cascade)
     challengeId Int
-    members     ChallengeParticipant[] @relation("TeamParticipants", onDelete: Cascade)
+    members     ChallengeParticipant[] @relation("TeamParticipants")
     createdAt   DateTime @default(now())
     updatedAt   DateTime @updatedAt
 
@@ -53,9 +53,9 @@ model ChallengeTeam {
 }
 
 model ChallengeParticipant {
-    id        String   @id @default(cuid())
+    id        Int      @id @default(autoincrement())
     team      ChallengeTeam @relation("TeamParticipants", fields: [teamId], references: [id], onDelete: Cascade)
-    teamId    String
+    teamId    Int
     person    Person @relation(fields: [personId], references: [id])
     personId  Int
     createdAt DateTime @default(now())

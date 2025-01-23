@@ -1,5 +1,4 @@
 import { prisma } from '../db'
-import { ChallengeParticipant } from './ChallengeParticipant'
 
 export class ChallengeTeam {
     constructor(data) {
@@ -17,43 +16,44 @@ export class ChallengeTeam {
         for (let i = 0; i < 4; i++) {
             code += chars.charAt(Math.floor(Math.random() * chars.length))
         }
-        return code.toLowerCase()
+        return code.toUpperCase()
     }
 
     // Create a new team with a unique join code for the challenge
     static async create(challengeId, personId) {
-        // Try to create a team with a unique join code, retry if there's a conflict
-        for (let attempts = 0; attempts < 10; attempts++) {
-            const joinCode = this.generateJoinCode()
-            try {
-                // Use a transaction to create both team and participant
-                const team = await prisma.$transaction(async (tx) => {
-                    const newTeam = await tx.challengeTeam.create({
-                        data: {
-                            challengeId,
-                            joinCode
-                        }
-                    })
+        // Generate a unique join code
+        let joinCode
+        let existingTeam
+        do {
+            joinCode = this.generateJoinCode()
+            existingTeam = await prisma.challengeTeam.findFirst({
+                where: {
+                    challengeId,
+                    joinCode
+                }
+            })
+        } while (existingTeam)
 
-                    // Create the participant record for the team creator
-                    await tx.challengeParticipant.create({
-                        data: {
-                            teamId: newTeam.id,
-                            personId
-                        }
-                    })
+        // Create the team and add the creator as first participant
+        const team = await prisma.$transaction(async (tx) => {
+            const team = await tx.challengeTeam.create({
+                data: {
+                    challengeId,
+                    joinCode
+                }
+            })
 
-                    return newTeam
-                })
+            await tx.challengeParticipant.create({
+                data: {
+                    teamId: team.id,
+                    personId
+                }
+            })
 
-                return new ChallengeTeam(team)
-            } catch (error) {
-                // If there's a unique constraint violation, try again
-                if (error.code === 'P2002') continue
-                throw error
-            }
-        }
-        throw new Error('Could not generate a unique join code after multiple attempts')
+            return team
+        })
+
+        return new ChallengeTeam(team)
     }
 
     // Find a team by ID
@@ -65,14 +65,13 @@ export class ChallengeTeam {
     }
 
     // Find a team by join code within a challenge
-    static async findByJoinCode(challengeId, joinCode) {
-        const team = await prisma.challengeTeam.findFirst({
+    static async findByCode(challengeId, joinCode) {
+        return await prisma.challengeTeam.findFirst({
             where: {
                 challengeId,
                 joinCode: joinCode.toLowerCase()
             }
         })
-        return team ? new ChallengeTeam(team) : null
     }
 
     // List all teams for a challenge
