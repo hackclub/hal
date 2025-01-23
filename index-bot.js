@@ -630,8 +630,8 @@ app.action(/create_team:.+/, async ({ ack, body, client }) => {
 
         const team = await ChallengeTeam.create(challengeId, person.id)
         
-        await client.views.push({
-            trigger_id: body.trigger_id,
+        await client.views.update({
+            view_id: body.view.id,
             view: {
                 type: "modal",
                 title: {
@@ -662,31 +662,18 @@ app.action(/create_team:.+/, async ({ ack, body, client }) => {
                                 text: "The code is case-insensitive"
                             }
                         ]
-                    },
-                    {
-                        type: "divider"
-                    },
-                    {
-                        type: "actions",
-                        elements: [
-                            {
-                                type: "button",
-                                text: {
-                                    type: "plain_text",
-                                    text: "Back to Home",
-                                    emoji: true
-                                },
-                                action_id: "return_to_home",
-                                style: "primary"
-                            }
-                        ]
                     }
-                ]
+                ],
+                close: {
+                    type: "plain_text",
+                    text: "Done",
+                    emoji: true
+                }
             }
         })
     } catch (error) {
-        await client.views.push({
-            trigger_id: body.trigger_id,
+        await client.views.update({
+            view_id: body.view.id,
             view: {
                 type: "modal",
                 title: {
@@ -701,26 +688,13 @@ app.action(/create_team:.+/, async ({ ack, body, client }) => {
                             type: "mrkdwn",
                             text: `Failed to create team: ${error.message}`
                         }
-                    },
-                    {
-                        type: "divider"
-                    },
-                    {
-                        type: "actions",
-                        elements: [
-                            {
-                                type: "button",
-                                text: {
-                                    type: "plain_text",
-                                    text: "Back to Home",
-                                    emoji: true
-                                },
-                                action_id: "return_to_home",
-                                style: "primary"
-                            }
-                        ]
                     }
-                ]
+                ],
+                close: {
+                    type: "plain_text",
+                    text: "Close",
+                    emoji: true
+                }
             }
         })
     }
@@ -893,26 +867,13 @@ app.view("join_team_modal", async ({ ack, body, view, client }) => {
                             type: "mrkdwn",
                             text: `*Team Code:* \`${newTeam.joinCode}\``
                         }
-                    },
-                    {
-                        type: "divider"
-                    },
-                    {
-                        type: "actions",
-                        elements: [
-                            {
-                                type: "button",
-                                text: {
-                                    type: "plain_text",
-                                    text: "Back to Home",
-                                    emoji: true
-                                },
-                                action_id: "return_to_home",
-                                style: "primary"
-                            }
-                        ]
                     }
-                ]
+                ],
+                close: {
+                    type: "plain_text",
+                    text: "Done",
+                    emoji: true
+                }
             }
         })
     } catch (error) {
@@ -1002,12 +963,34 @@ app.action(/leave_team:.+/, async ({ ack, body, client }) => {
 
         await client.views.update({
             view_id: body.view.id,
-            view
+            hash: body.view.hash,  // Add hash to prevent race conditions
+            view: {
+                type: "modal",
+                title: {
+                    type: "plain_text",
+                    text: "Success! 🎉",
+                    emoji: true
+                },
+                blocks: [
+                    {
+                        type: "section",
+                        text: {
+                            type: "mrkdwn",
+                            text: "✅ You've successfully left the team!"
+                        }
+                    }
+                ],
+                close: {
+                    type: "plain_text",
+                    text: "Done",
+                    emoji: true
+                }
+            }
         })
     } catch (error) {
-        // Show error message
-        await client.views.push({
-            trigger_id: body.trigger_id,
+        await client.views.update({
+            view_id: body.view.id,
+            hash: body.view.hash,  // Add hash to prevent race conditions
             view: {
                 type: "modal",
                 title: {
@@ -1022,26 +1005,13 @@ app.action(/leave_team:.+/, async ({ ack, body, client }) => {
                             type: "mrkdwn",
                             text: `Failed to leave team: ${error.message}`
                         }
-                    },
-                    {
-                        type: "divider"
-                    },
-                    {
-                        type: "actions",
-                        elements: [
-                            {
-                                type: "button",
-                                text: {
-                                    type: "plain_text",
-                                    text: "Back to Home",
-                                    emoji: true
-                                },
-                                action_id: "return_to_home",
-                                style: "primary"
-                            }
-                        ]
                     }
-                ]
+                ],
+                close: {
+                    type: "plain_text",
+                    text: "Close",
+                    emoji: true
+                }
             }
         })
     }
