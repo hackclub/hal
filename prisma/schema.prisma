@@ -10,6 +10,25 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum ChallengeType {
+  DAILY
+  CUMULATIVE
+}
+
+model Challenge {
+  id                        Int          @id @default(autoincrement())
+  name                      String       @unique
+  startedTime              DateTime?
+  endedTime                DateTime?
+  challengeType            ChallengeType
+  challengeMinimumTime     Int
+  challengeEditorConstraint String?
+  challengeLanguageConstraint String?
+  challengeMinimumTeamSize  Int         @default(0)
+  createdAt                DateTime     @default(now())
+  updatedAt                DateTime     @updatedAt
+}
+
 model Person {
   id          Int      @id @default(autoincrement())
   slackId     String   @unique

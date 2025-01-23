@@ -1,3 +1,5 @@
+import { ChallengeType } from "@prisma/client"
+import { Challenge } from "../models/Challenge"
 import { Person } from "../models/Person"
 
 const Router = {
@@ -5,12 +7,30 @@ const Router = {
     use(fn) {
         this.middleware.push(fn)
     },
-    "challenge create": function(body, args) {
+    "challenge create (\\w+)": async function(body, name) {
+        const challenge = await Challenge.findByName(name)
+        if (challenge) {
+            return {
+                "response_type": "ephemeral", 
+                "text": `Challenge \`${challengeName}\` already exists`
+            }
+        }
+        
+        const newChallenge = await Challenge.create({
+            challengeType: ChallengeType.DAILY, // Daily is only supported for now
+            name: name,
+            challengeMinimumTime: 15,
+            challengeEditorConstraint: null,
+            challengeLanguageConstraint: null,
+            challengeMinimumTeamSize: 0
+        })
+
         return {
             "response_type": "ephemeral", 
-            "text": "Creating a challenge!"
+            "text": `Challenge \`${name}\` created! People can join by typing \`/hal challenge `
         }
     },
+
     "team (.+)": function(body, args) {
         console.log(body, args)
         return {

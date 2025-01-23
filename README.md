@@ -12,10 +12,11 @@ Challenge types:
 - Cumulative - Code a total of X minutes / hours by the end
 
 Challenges
-- States: openForSignUps, started, ended
 - createdAt
-- startTime
-- endTime
+- name
+- States: openForSignUps, started, ended
+- startedTime
+- endedTime
 - challengeType: daily or cumulative
 - challengeMinimumTime: 15
 - challengeEditorContraint: Godot
