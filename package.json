@@ -1,5 +1,9 @@
 {
-  "dependencies": { "@prisma/client": "^6.2.1", "@slack/bolt": "^4.2.0" },
+  "dependencies": {
+    "@prisma/client": "^6.2.1",
+    "@slack/bolt": "^4.2.0",
+    "dotenv": "^16.4.7"
+  },
   "devDependencies": {
     "prisma": "^6.2.1"
   }

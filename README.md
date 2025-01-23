@@ -30,11 +30,14 @@ ChallengeTeam
 ChallengeParticipant
 - Team
 - Person
+- Timezone
 
-ParticipantDailyHackatimeSummary
-- ParticipatingMember
-- fromDate
-- toDate
+ChallengeParticipantDailyHackatimeSummary
+- The primary key should be the date and the ChallengeParticipant
+- date - YYYY-MM-DD (postgres date)
+- ChallengeParticipant
+- timezone
+- jsonLastUpdated
 - json
 
 Person

@@ -59,8 +59,23 @@ model ChallengeParticipant {
     person    Person @relation(fields: [personId], references: [id])
     personId  Int
     timezone  String
+    dailySummaries ChallengeParticipantDailyHackatimeSummary[]
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
     @@unique([teamId, personId])
+}
+
+model ChallengeParticipantDailyHackatimeSummary {
+    date               DateTime            @db.Date
+    challengeParticipant ChallengeParticipant @relation(fields: [challengeParticipantId], references: [id], onDelete: Cascade)
+    challengeParticipantId Int
+    timezone           String
+    jsonLastUpdated    DateTime
+    json              Json
+
+    createdAt         DateTime            @default(now())
+    updatedAt         DateTime            @updatedAt
+
+    @@id([date, challengeParticipantId])
 }

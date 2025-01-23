@@ -1,4 +1,6 @@
 import { prisma } from '../db'
+import { daysBetweenYyymmdd, yyyymmddLocalTimezone } from '../util'
+import { Challenge } from './Challenge'
 import { ChallengeTeam } from './ChallengeTeam'
 
 export class ChallengeParticipant {
@@ -6,6 +8,7 @@ export class ChallengeParticipant {
         this.id = data.id
         this.teamId = data.teamId
         this.personId = data.personId
+        this.timezone = data.timezone
         this.createdAt = data.createdAt
         this.updatedAt = data.updatedAt
         // Include related data if it was included in the query
@@ -75,6 +78,74 @@ export class ChallengeParticipant {
             }
         })
         return participants.map(p => new ChallengeParticipant(p))
+    }
+
+    // Get all participants eligible for hackatime refresh by slack ID
+    static async getEligibleForHackatimeRefresh(slackId) {
+        const sevenDaysAgo = new Date()
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+        
+        const participants = await prisma.challengeParticipant.findMany({
+            where: {
+                person: {
+                    slackId
+                },
+                team: {
+                    challenge: {
+                        OR: [
+                            // Challenge has started but not ended
+                            {
+                                startedTime: { not: null },
+                                endedTime: null
+                            },
+                            // Challenge ended within the past 7 days
+                            {
+                                endedTime: {
+                                    gte: sevenDaysAgo
+                                }
+                            }
+                        ]
+                    }
+                }
+            },
+            include: {
+                team: {
+                    include: {
+                        challenge: true
+                    }
+                },
+                person: true
+            }
+        })
+        return participants.map(p => new ChallengeParticipant(p))
+    }
+
+    async refreshDailyHackatimeSummaries(heartbeatsStartDateUtc, heartbeatsEndDateUtc) {
+        let challenge = await Challenge.findById(this.team.challengeId)
+
+        let tz = this.timezone
+        
+        let heartbeatsStartDate = yyyymmddLocalTimezone(heartbeatsStartDateUtc, tz)
+        let heartbeatsEndDate = yyyymmddLocalTimezone(heartbeatsEndDateUtc, tz)
+
+        // these are the days we've received new heartbeats for
+        // note: this could include past days, for example if the user was on an
+        // airplane and a bunch of heartbeats were sent after they landed
+        let heartbeatDays = daysBetweenYyymmdd(heartbeatsStartDate, heartbeatsEndDate)
+
+        let challengeStartDate = yyyymmddLocalTimezone(challenge.startedTime, tz)
+        let challengeEndDate = challenge.endedTime ?
+            yyyymmddLocalTimezone(challenge.endedTime, tz) : heartbeatsEndDate
+
+        // these are the days the challenge is active
+        let challengeDays = daysBetweenYyymmdd(challengeStartDate, challengeEndDate)
+
+        // days during the challenge that we've received new heartbeats for
+        let daysToRefresh = heartbeatDays.filter(day => challengeDays.includes(day))
+
+        for (let day of daysToRefresh) {
+            let dailySummary = await DailyHackatimeSummary.findByDay(day)
+        }
     }
 
     // Remove a participant from a team
